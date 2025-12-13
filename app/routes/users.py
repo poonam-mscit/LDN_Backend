@@ -49,56 +49,70 @@ def get_user(user_id):
 @require_auth
 def update_user(user_id):
     """Update user (self-service or admin)"""
-    user = User.query.get_or_404(user_id)
-    data = request.get_json()
-    
-    # Update allowed fields (self-service)
-    if 'full_name' in data:
-        user.full_name = data['full_name']
-    if 'phone_number' in data:
-        user.phone_number = data['phone_number']
-    
-    # Admin-only fields (check role in decorator would be better, but keeping simple for now)
-    # For now, allow is_active if provided (should be admin-only in production)
-    if 'is_active' in data:
-        user.is_active = data['is_active']
-    
-    # Update address fields
-    if 'address_line_1' in data:
-        user.address_line_1 = data['address_line_1']
-    if 'address_line_2' in data:
-        user.address_line_2 = data['address_line_2']
-    if 'city' in data:
-        user.city = data['city']
-    if 'postcode' in data:
-        user.postcode = data['postcode']
-    if 'address_file_url' in data:
-        user.address_file_url = data['address_file_url']
-    
-    # Validate address before allowing shift toggle for clerks
-    if 'is_on_shift' in data:
-        if data['is_on_shift'] and user.role == 'clerk':
-            # Check if address is complete
-            if not user.address_line_1 or not user.city or not user.postcode:
-                return jsonify({
-                    'error': 'Address verification required',
-                    'message': 'Please complete your address information (Address Line 1, City, and Postcode) before going on shift. Address verification is mandatory for clerks.'
-                }), 400
-            # Also check for address file if available
-            if not user.address_file_url:
-                return jsonify({
-                    'error': 'Address file required',
-                    'message': 'Please upload proof of address before going on shift. Address verification is mandatory for clerks.'
-                }), 400
-        user.is_on_shift = data['is_on_shift']
-    
-    if 'current_lat' in data and 'current_lng' in data:
-        user.current_lat = data['current_lat']
-        user.current_lng = data['current_lng']
-        user.last_location_update = datetime.utcnow()
-    
-    db.session.commit()
-    return jsonify(user.to_dict()), 200
+    try:
+        user = User.query.get_or_404(user_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Update allowed fields (self-service)
+        if 'full_name' in data:
+            user.full_name = data['full_name'].strip() if data['full_name'] else None
+        
+        if 'phone_number' in data:
+            user.phone_number = data['phone_number'].strip() if data['phone_number'] else None
+        
+        # Admin-only fields (check role in decorator would be better, but keeping simple for now)
+        # For now, allow is_active if provided (should be admin-only in production)
+        if 'is_active' in data:
+            user.is_active = data['is_active']
+        
+        # Update address fields
+        if 'address_line_1' in data:
+            user.address_line_1 = data['address_line_1'].strip() if data['address_line_1'] else None
+        if 'address_line_2' in data:
+            user.address_line_2 = data['address_line_2'].strip() if data['address_line_2'] else None
+        if 'city' in data:
+            user.city = data['city'].strip() if data['city'] else None
+        if 'postcode' in data:
+            user.postcode = data['postcode'].strip() if data['postcode'] else None
+        if 'address_file_url' in data:
+            user.address_file_url = data['address_file_url'] if data['address_file_url'] else None
+        
+        # Validate address before allowing shift toggle for clerks
+        if 'is_on_shift' in data:
+            if data['is_on_shift'] and user.role == 'clerk':
+                # Check if address is complete
+                if not user.address_line_1 or not user.city or not user.postcode:
+                    return jsonify({
+                        'error': 'Address verification required',
+                        'message': 'Please complete your address information (Address Line 1, City, and Postcode) before going on shift. Address verification is mandatory for clerks.'
+                    }), 400
+                # Also check for address file if available
+                if not user.address_file_url:
+                    return jsonify({
+                        'error': 'Address file required',
+                        'message': 'Please upload proof of address before going on shift. Address verification is mandatory for clerks.'
+                    }), 400
+            user.is_on_shift = data['is_on_shift']
+        
+        if 'current_lat' in data and 'current_lng' in data:
+            user.current_lat = data['current_lat']
+            user.current_lng = data['current_lng']
+            user.last_location_update = datetime.utcnow()
+        
+        # Commit changes
+        db.session.commit()
+        
+        # Refresh the user object to get the latest data including updated_at
+        db.session.refresh(user)
+        
+        return jsonify(user.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error updating user {user_id}: {str(e)}')
+        return jsonify({'error': 'Failed to update user', 'message': str(e)}), 500
 
 @bp.route('/me', methods=['GET'])
 @require_auth
