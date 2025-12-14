@@ -18,7 +18,15 @@ def create_app(config_class=None):
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    
+    # Configure CORS with allowed origins from config
+    # If '*' is in the list, allow all origins (development)
+    # Otherwise, use the specific origins (production)
+    cors_origins = app.config.get('CORS_ALLOWED_ORIGINS', ['*'])
+    if '*' in cors_origins:
+        CORS(app, resources={r"/api/*": {"origins": "*"}})
+    else:
+        CORS(app, resources={r"/api/*": {"origins": cors_origins}})
     
     # Register blueprints - Clean resource-based structure
     from app.routes import auth, users, jobs, properties, invoices, availability, chat, notifications

@@ -29,6 +29,11 @@ class Config:
     
     # Pagination
     POSTS_PER_PAGE = 20
+    
+    # CORS Configuration
+    # Comma-separated list of allowed origins, or '*' for all origins
+    # Example: 'http://localhost:5173,http://localhost:3000,https://yourdomain.com'
+    CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '*').split(',')
 
 class DevelopmentConfig(Config):
     DEBUG = True
