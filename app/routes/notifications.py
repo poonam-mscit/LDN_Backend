@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models.notification import Notification
+from app.models.user import User
 from app.utils.auth import require_auth
 
 bp = Blueprint('notifications', __name__)
@@ -9,13 +10,18 @@ bp = Blueprint('notifications', __name__)
 @require_auth
 def get_notifications():
     """Get notifications for current user"""
-    # TODO: Get user_id from authenticated user
-    user_id = request.args.get('user_id')
+    current_user = request.current_user
+    
+    # Get user_id from authenticated user
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     unread_only = request.args.get('unread_only', 'false').lower() == 'true'
     
-    query = Notification.query.filter_by(user_id=user_id)
+    query = Notification.query.filter_by(user_id=user.id)
     if unread_only:
         query = query.filter_by(is_read=False)
     
@@ -45,10 +51,14 @@ def mark_notification_read(notification_id):
 @require_auth
 def mark_all_read():
     """Mark all notifications as read for current user"""
-    # TODO: Get user_id from authenticated user
-    user_id = request.get_json().get('user_id')
+    current_user = request.current_user
     
-    Notification.query.filter_by(user_id=user_id, is_read=False).update({'is_read': True})
+    # Get user_id from authenticated user
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    Notification.query.filter_by(user_id=user.id, is_read=False).update({'is_read': True})
     db.session.commit()
     return jsonify({'message': 'All notifications marked as read'}), 200
 
@@ -56,9 +66,13 @@ def mark_all_read():
 @require_auth
 def get_unread_count():
     """Get unread notification count for current user"""
-    # TODO: Get user_id from authenticated user
-    user_id = request.args.get('user_id')
+    current_user = request.current_user
     
-    count = Notification.query.filter_by(user_id=user_id, is_read=False).count()
+    # Get user_id from authenticated user
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
     return jsonify({'unread_count': count}), 200
 

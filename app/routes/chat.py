@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.chat import ChatMessage, ChatParticipant
 from app.models.job import Job
+from app.models.user import User
 from app.utils.auth import require_auth
 from datetime import datetime
 
@@ -21,11 +22,16 @@ def send_message(job_id):
     """Send a message in job chat"""
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
+    current_user = request.current_user
     
-    # TODO: Get sender_id from authenticated user
+    # Get user_id from authenticated user
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
     message = ChatMessage(
         job_id=job_id,
-        sender_id=data.get('sender_id'),  # Should come from auth token
+        sender_id=user.id,
         content=data.get('content'),
         attachment_url=data.get('attachment_url'),
         is_system_message=data.get('is_system_message', False)
@@ -41,12 +47,16 @@ def send_message(job_id):
 def mark_read(job_id):
     """Mark messages as read for current user"""
     job = Job.query.get_or_404(job_id)
-    # TODO: Get user_id from authenticated user
-    user_id = request.get_json().get('user_id')
+    current_user = request.current_user
     
-    participant = ChatParticipant.query.filter_by(job_id=job_id, user_id=user_id).first()
+    # Get user_id from authenticated user
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    participant = ChatParticipant.query.filter_by(job_id=job_id, user_id=user.id).first()
     if not participant:
-        participant = ChatParticipant(job_id=job_id, user_id=user_id)
+        participant = ChatParticipant(job_id=job_id, user_id=user.id)
         db.session.add(participant)
     
     participant.last_read_at = datetime.utcnow()
@@ -58,10 +68,14 @@ def mark_read(job_id):
 @require_auth
 def get_unread_count(job_id):
     """Get unread message count for current user"""
-    # TODO: Get user_id from authenticated user
-    user_id = request.args.get('user_id')
+    current_user = request.current_user
     
-    participant = ChatParticipant.query.filter_by(job_id=job_id, user_id=user_id).first()
+    # Get user_id from authenticated user
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    participant = ChatParticipant.query.filter_by(job_id=job_id, user_id=user.id).first()
     last_read = participant.last_read_at if participant else None
     
     query = ChatMessage.query.filter_by(job_id=job_id)

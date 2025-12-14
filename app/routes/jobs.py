@@ -4,9 +4,10 @@ from app.models.job import Job
 from app.models.property import Property
 from app.models.user import User
 from app.models.assignment_log import AssignmentLog
-from app.utils.auth import require_auth, require_role
-from app.utils.helpers import convert_handover_camel_to_snake
-from datetime import datetime
+from app.models.availability import ClerkAvailability
+from app.utils.auth import require_auth, require_role, get_current_user
+from app.utils.helpers import convert_handover_camel_to_snake, calculate_distance
+from datetime import datetime, date, time
 
 bp = Blueprint('jobs', __name__)
 
@@ -53,16 +54,118 @@ def get_job(job_id):
         job_dict['property'] = job.property.to_dict()
     return jsonify(job_dict), 200
 
+def auto_assign_job(job, property_obj):
+    """Auto-assign job to best available clerk"""
+    appointment_date = job.appointment_date.date()
+    is_today = appointment_date == date.today()
+    
+    # Find available clerks
+    query = User.query.filter_by(role='clerk', is_active=True)
+    
+    # For today's jobs, check is_on_shift
+    if is_today:
+        query = query.filter_by(is_on_shift=True)
+    
+    clerks = query.all()
+    
+    if not clerks:
+        return None
+    
+    # Filter by availability for future dates
+    available_clerks = []
+    for clerk in clerks:
+        if is_today:
+            # For today, just check if they have location
+            if clerk.current_lat and clerk.current_lng:
+                available_clerks.append(clerk)
+        else:
+            # For future dates, check availability calendar
+            availability = ClerkAvailability.query.filter_by(
+                user_id=clerk.id,
+                available_date=appointment_date,
+                is_available=True
+            ).first()
+            if availability:
+                available_clerks.append(clerk)
+    
+    if not available_clerks:
+        return None
+    
+    # Check for previous clerk at same property
+    previous_job = Job.query.filter_by(
+        property_id=property_obj.id,
+        status='completed'
+    ).order_by(Job.check_out_at.desc()).first()
+    
+    # Calculate scores for each clerk
+    clerk_scores = []
+    for clerk in available_clerks:
+        score = 0
+        
+        # Previous clerk bonus (+50 points)
+        if previous_job and previous_job.assigned_clerk_id == clerk.id:
+            score += 50
+        
+        # Distance score (closer = higher score)
+        if property_obj.latitude and property_obj.longitude:
+            if clerk.current_lat and clerk.current_lng:
+                distance = calculate_distance(
+                    float(property_obj.latitude),
+                    float(property_obj.longitude),
+                    float(clerk.current_lat),
+                    float(clerk.current_lng)
+                )
+                # Inverse distance score (closer = higher, max 100 points)
+                score += max(0, 100 - (distance * 10))
+            elif not is_today:
+                # For future dates, use availability postcode if available
+                availability = ClerkAvailability.query.filter_by(
+                    user_id=clerk.id,
+                    available_date=appointment_date
+                ).first()
+                if availability and availability.postcode:
+                    # Use postcode matching as fallback (simplified)
+                    if availability.postcode[:4] == property_obj.postcode[:4]:
+                        score += 30
+        
+        # Current job count (fewer = higher score)
+        current_jobs = Job.query.filter(
+            Job.assigned_clerk_id == clerk.id,
+            Job.status.in_(['assigned', 'on_route', 'in_progress'])
+        ).count()
+        score += max(0, 20 - current_jobs)
+        
+        clerk_scores.append((clerk.id, score))
+    
+    # Sort by score and return best clerk
+    if not clerk_scores:
+        return None
+    
+    clerk_scores.sort(key=lambda x: x[1], reverse=True)
+    return clerk_scores[0][0]
+
 @bp.route('/', methods=['POST'])
 @require_auth
 @require_role('admin', 'agent')
 def create_job():
     """Create a new job"""
     data = request.get_json()
+    current_user = request.current_user
     
+    # Get property
+    property_obj = Property.query.get_or_404(data['property_id'])
+    
+    # Resolve created_by_user_id from cognito_sub
+    created_by_user_id = None
+    if current_user.get('cognito_sub'):
+        user = User.query.filter_by(cognito_sub=current_user['cognito_sub']).first()
+        if user:
+            created_by_user_id = user.id
+    
+    # Create job
     job = Job(
         property_id=data['property_id'],
-        created_by_user_id=data.get('created_by_user_id'),
+        created_by_user_id=created_by_user_id,
         job_type=data.get('job_type', 'Logistics_Visit'),
         priority=data.get('priority', 'normal'),
         appointment_date=datetime.fromisoformat(data['appointment_date'].replace('Z', '+00:00')),
@@ -75,6 +178,27 @@ def create_job():
     )
     
     db.session.add(job)
+    db.session.flush()  # Get job.id
+    
+    # Auto-assign if requested
+    assignment_type = data.get('assignment_type', 'manual')
+    if assignment_type == 'auto':
+        clerk_id = auto_assign_job(job, property_obj)
+        if clerk_id:
+            previous_clerk_id = job.assigned_clerk_id
+            job.assigned_clerk_id = clerk_id
+            job.status = 'assigned'
+            
+            # Log assignment
+            log = AssignmentLog(
+                job_id=job.id,
+                previous_clerk_id=previous_clerk_id,
+                new_clerk_id=clerk_id,
+                action_type='AUTO_ASSIGN',
+                reason='Auto-assigned by system based on availability and location'
+            )
+            db.session.add(log)
+    
     db.session.commit()
     
     return jsonify(job.to_dict()), 201
@@ -153,10 +277,67 @@ def check_in(job_id):
     job.check_in_lng = data.get('lng')
     job.status = 'in_progress'
     
-    # Check if location is far from property
+    # Check if location is far from property (100m = 0.1km threshold)
     if job.property and job.property.latitude and job.property.longitude:
-        # TODO: Calculate distance and set location_warning_flag
-        pass
+        if job.check_in_lat and job.check_in_lng:
+            distance = calculate_distance(
+                float(job.property.latitude),
+                float(job.property.longitude),
+                float(job.check_in_lat),
+                float(job.check_in_lng)
+            )
+            # Set warning flag if distance > 100m (0.1km)
+            job.location_warning_flag = distance > 0.1
+    
+    db.session.commit()
+    return jsonify(job.to_dict()), 200
+
+@bp.route('/<job_id>/reject', methods=['POST'])
+@require_auth
+@require_role('clerk')
+def reject_job(job_id):
+    """Clerk rejects job assignment - triggers auto-reassignment"""
+    job = Job.query.get_or_404(job_id)
+    current_user = request.current_user
+    
+    # Verify this clerk is assigned to the job
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    if not user or job.assigned_clerk_id != user.id:
+        return jsonify({'error': 'You are not assigned to this job'}), 403
+    
+    previous_clerk_id = job.assigned_clerk_id
+    
+    # Unassign job
+    job.assigned_clerk_id = None
+    job.status = 'pending_assignment'
+    
+    # Log rejection
+    log = AssignmentLog(
+        job_id=job.id,
+        previous_clerk_id=previous_clerk_id,
+        new_clerk_id=None,
+        action_type='REJECTION',
+        triggered_by_user_id=user.id,
+        reason='Clerk rejected assignment'
+    )
+    db.session.add(log)
+    
+    # Try to auto-reassign to another clerk
+    if job.property:
+        new_clerk_id = auto_assign_job(job, job.property)
+        if new_clerk_id:
+            job.assigned_clerk_id = new_clerk_id
+            job.status = 'assigned'
+            
+            # Log auto-reassignment
+            reassign_log = AssignmentLog(
+                job_id=job.id,
+                previous_clerk_id=None,
+                new_clerk_id=new_clerk_id,
+                action_type='AUTO_ASSIGN',
+                reason='Auto-reassigned after rejection'
+            )
+            db.session.add(reassign_log)
     
     db.session.commit()
     return jsonify(job.to_dict()), 200

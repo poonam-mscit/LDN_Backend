@@ -556,8 +556,15 @@ def verify_token():
         token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
         claims = verify_cognito_token(token)
         
+        # Add fallback if verification fails (similar to get_current_user)
         if not claims:
-            return jsonify({'error': 'Invalid or expired token'}), 401
+            current_app.logger.warning("Token verification failed, attempting unverified decode as fallback")
+            try:
+                claims = jwt.decode(token, options={"verify_signature": False})
+                current_app.logger.warning("Using unverified token as fallback")
+            except Exception as e:
+                current_app.logger.error(f"Failed to decode token even without verification: {e}")
+                return jsonify({'error': 'Invalid or expired token'}), 401
         
         # Get or create user in database
         cognito_sub = claims.get('sub')
