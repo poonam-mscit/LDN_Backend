@@ -24,9 +24,21 @@ def create_app(config_class=None):
     # Otherwise, use the specific origins (production)
     cors_origins = app.config.get('CORS_ALLOWED_ORIGINS', ['*'])
     if '*' in cors_origins:
-        CORS(app, resources={r"/api/*": {"origins": "*"}})
+        CORS(app, resources={r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": True
+        }})
     else:
-        CORS(app, resources={r"/api/*": {"origins": cors_origins}})
+        CORS(app, resources={r"/api/*": {
+            "origins": cors_origins,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type"],
+            "supports_credentials": True
+        }})
     
     # Register blueprints - Clean resource-based structure
     from app.routes import auth, users, jobs, properties, invoices, availability, chat, notifications

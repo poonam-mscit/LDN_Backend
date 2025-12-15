@@ -364,3 +364,41 @@ def complete_job(job_id):
     db.session.commit()
     return jsonify(job.to_dict()), 200
 
+@bp.route('/<job_id>/assignment-logs', methods=['GET'])
+@require_auth
+def get_job_assignment_logs(job_id):
+    """Get assignment logs for a specific job"""
+    logs = AssignmentLog.query.filter_by(job_id=job_id).order_by(AssignmentLog.created_at.desc()).all()
+    return jsonify([log.to_dict() for log in logs]), 200
+
+@bp.route('/assignment-logs', methods=['GET'])
+@require_auth
+def get_all_assignment_logs():
+    """Get all assignment logs"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    
+    query = AssignmentLog.query.order_by(AssignmentLog.created_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    logs = pagination.items
+    
+    # Include clerk names in response
+    logs_data = []
+    for log in logs:
+        log_dict = log.to_dict()
+        if log.previous_clerk_id:
+            prev_clerk = User.query.get(log.previous_clerk_id)
+            log_dict['previous_clerk_name'] = prev_clerk.full_name if prev_clerk else None
+        if log.new_clerk_id:
+            new_clerk = User.query.get(log.new_clerk_id)
+            log_dict['new_clerk_name'] = new_clerk.full_name if new_clerk else None
+        logs_data.append(log_dict)
+    
+    return jsonify({
+        'logs': logs_data,
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pagination.pages
+    }), 200
+

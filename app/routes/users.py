@@ -16,9 +16,8 @@ def allowed_file(filename):
 
 @bp.route('/', methods=['GET'])
 @require_auth
-@require_role('admin')
 def get_users():
-    """Get all users (admin only)"""
+    """Get all users"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     role = request.args.get('role')

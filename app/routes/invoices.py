@@ -46,9 +46,8 @@ def submit_invoice():
 
 @bp.route('/<invoice_id>', methods=['PUT'])
 @require_auth
-@require_role('admin')
 def update_invoice_status(invoice_id):
-    """Update invoice status (admin only)"""
+    """Update invoice status"""
     invoice = ClerkInvoice.query.get_or_404(invoice_id)
     data = request.get_json()
     
