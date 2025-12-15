@@ -27,6 +27,7 @@ from app.models.notification import Notification
 
 # System Models
 from app.models.integration import IntegrationSettings
+from app.models.settings import GeneralSettings
 
 __all__ = [
     # Core Models
@@ -44,5 +45,6 @@ __all__ = [
     'Notification',
     # System
     'IntegrationSettings',
+    'GeneralSettings',
 ]
 

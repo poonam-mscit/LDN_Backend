@@ -41,7 +41,7 @@ def create_app(config_class=None):
         }})
     
     # Register blueprints - Clean resource-based structure
-    from app.routes import auth, users, jobs, properties, invoices, availability, chat, notifications
+    from app.routes import auth, users, jobs, properties, invoices, availability, chat, notifications, settings
     
     app.register_blueprint(auth.bp, url_prefix='/api/auth')
     app.register_blueprint(users.bp, url_prefix='/api/users')
@@ -51,6 +51,7 @@ def create_app(config_class=None):
     app.register_blueprint(availability.bp, url_prefix='/api/availability')
     app.register_blueprint(chat.bp, url_prefix='/api/chat')
     app.register_blueprint(notifications.bp, url_prefix='/api/notifications')
+    app.register_blueprint(settings.bp, url_prefix='/api/settings')
     
     return app
 
