@@ -211,7 +211,7 @@ def create_job():
     db.session.add(job)
     db.session.flush()  # Get job.id
     
-    # Auto-assign if requested
+    # Handle assignment
     assignment_type = data.get('assignment_type', 'manual')
     if assignment_type == 'auto':
         clerk_id = auto_assign_job(job, property_obj)
@@ -227,6 +227,29 @@ def create_job():
                 new_clerk_id=clerk_id,
                 action_type='AUTO_ASSIGN',
                 reason='Auto-assigned by system based on availability and location'
+            )
+            db.session.add(log)
+    elif assignment_type == 'manual':
+        # Manual assignment - clerk_id should be provided
+        clerk_id = data.get('clerk_id')
+        if clerk_id:
+            # Verify clerk exists and is active
+            clerk = User.query.filter_by(id=clerk_id, role='clerk', is_active=True).first()
+            if not clerk:
+                db.session.rollback()
+                return jsonify({'error': 'Invalid clerk selected'}), 400
+            
+            previous_clerk_id = job.assigned_clerk_id
+            job.assigned_clerk_id = clerk_id
+            job.status = 'assigned'
+            
+            # Log assignment
+            log = AssignmentLog(
+                job_id=job.id,
+                previous_clerk_id=previous_clerk_id,
+                new_clerk_id=clerk_id,
+                action_type='MANUAL_OVERRIDE',
+                reason=data.get('reason', 'Manual assignment during job creation')
             )
             db.session.add(log)
     
