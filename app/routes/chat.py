@@ -14,7 +14,25 @@ def get_messages(job_id):
     """Get all messages for a job"""
     job = Job.query.get_or_404(job_id)
     messages = ChatMessage.query.filter_by(job_id=job_id).order_by(ChatMessage.sent_at).all()
-    return jsonify([msg.to_dict() for msg in messages]), 200
+    
+    # Include sender information for each message
+    messages_data = []
+    for msg in messages:
+        msg_dict = msg.to_dict()
+        if msg.sender_id:
+            sender = User.query.get(msg.sender_id)
+            if sender:
+                msg_dict['sender_name'] = sender.full_name
+                msg_dict['sender_role'] = sender.role
+            else:
+                msg_dict['sender_name'] = None
+                msg_dict['sender_role'] = None
+        else:
+            msg_dict['sender_name'] = None
+            msg_dict['sender_role'] = None
+        messages_data.append(msg_dict)
+    
+    return jsonify(messages_data), 200
 
 @bp.route('/jobs/<job_id>/messages', methods=['POST'])
 @require_auth
@@ -40,7 +58,21 @@ def send_message(job_id):
     db.session.add(message)
     db.session.commit()
     
-    return jsonify(message.to_dict()), 201
+    # Include sender information in response
+    msg_dict = message.to_dict()
+    if message.sender_id:
+        sender = User.query.get(message.sender_id)
+        if sender:
+            msg_dict['sender_name'] = sender.full_name
+            msg_dict['sender_role'] = sender.role
+        else:
+            msg_dict['sender_name'] = None
+            msg_dict['sender_role'] = None
+    else:
+        msg_dict['sender_name'] = None
+        msg_dict['sender_role'] = None
+    
+    return jsonify(msg_dict), 201
 
 @bp.route('/jobs/<job_id>/read', methods=['POST'])
 @require_auth
