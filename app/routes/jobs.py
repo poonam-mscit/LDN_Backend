@@ -6,7 +6,7 @@ from app.models.user import User
 from app.models.assignment_log import AssignmentLog
 from app.models.availability import ClerkAvailability
 from app.utils.auth import require_auth, require_role, get_current_user
-from app.utils.helpers import convert_handover_camel_to_snake, calculate_distance
+from app.utils.helpers import convert_handover_camel_to_snake, calculate_distance, create_notification
 from datetime import datetime, date, time
 
 bp = Blueprint('jobs', __name__)
@@ -229,6 +229,21 @@ def create_job():
                 reason='Auto-assigned by system based on availability and location'
             )
             db.session.add(log)
+            
+            # Create notification for clerk
+            property_address = property_obj.address_line_1 or 'Property'
+            if property_obj.address_line_2:
+                property_address += f", {property_obj.address_line_2}"
+            appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+            
+            create_notification(
+                user_id=clerk_id,
+                notification_type='JOB_ASSIGNED',
+                title='New Job Assigned',
+                body=f'You have been assigned a new job at {property_address}. Appointment: {appointment_date}',
+                job_id=job.id,
+                channel='in_app'
+            )
     elif assignment_type == 'manual':
         # Manual assignment - clerk_id should be provided
         clerk_id = data.get('clerk_id')
@@ -252,6 +267,21 @@ def create_job():
                 reason=data.get('reason', 'Manual assignment during job creation')
             )
             db.session.add(log)
+            
+            # Create notification for clerk
+            property_address = property_obj.address_line_1 or 'Property'
+            if property_obj.address_line_2:
+                property_address += f", {property_obj.address_line_2}"
+            appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+            
+            create_notification(
+                user_id=clerk_id,
+                notification_type='JOB_ASSIGNED',
+                title='New Job Assigned',
+                body=f'You have been assigned a new job at {property_address}. Appointment: {appointment_date}',
+                job_id=job.id,
+                channel='in_app'
+            )
     
     db.session.commit()
     
@@ -303,6 +333,38 @@ def assign_job(job_id):
         reason=data.get('reason', 'Admin manual assignment')
     )
     db.session.add(log)
+    
+    # Notify previous clerk if job was reassigned
+    if previous_clerk_id and previous_clerk_id != clerk_id:
+        property_address = job.property.address_line_1 if job.property else 'Property'
+        if job.property and job.property.address_line_2:
+            property_address += f", {job.property.address_line_2}"
+        appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+        
+        create_notification(
+            user_id=previous_clerk_id,
+            notification_type='JOB_REASSIGNED',
+            title='Job Reassigned',
+            body=f'Job at {property_address} (Appointment: {appointment_date}) has been reassigned to another clerk.',
+            job_id=job.id,
+            channel='in_app'
+        )
+    
+    # Notify new clerk
+    property_address = job.property.address_line_1 if job.property else 'Property'
+    if job.property and job.property.address_line_2:
+        property_address += f", {job.property.address_line_2}"
+    appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+    
+    create_notification(
+        user_id=clerk_id,
+        notification_type='JOB_ASSIGNED',
+        title='Job Assigned',
+        body=f'You have been assigned a job at {property_address}. Appointment: {appointment_date}',
+        job_id=job.id,
+        channel='in_app'
+    )
+    
     db.session.commit()
     
     return jsonify(job.to_dict()), 200
@@ -376,6 +438,25 @@ def reject_job(job_id):
     )
     db.session.add(log)
     
+    # Notify admin about rejection
+    # Get all admin users
+    admin_users = User.query.filter_by(role='admin', is_active=True).all()
+    property_address = job.property.address_line_1 if job.property else 'Property'
+    if job.property and job.property.address_line_2:
+        property_address += f", {job.property.address_line_2}"
+    appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+    clerk_name = user.full_name if user else 'Clerk'
+    
+    for admin in admin_users:
+        create_notification(
+            user_id=admin.id,
+            notification_type='JOB_REJECTED',
+            title='Job Rejected',
+            body=f'{clerk_name} has rejected job at {property_address} (Appointment: {appointment_date}). Auto-reassignment in progress.',
+            job_id=job.id,
+            channel='in_app'
+        )
+    
     # Try to auto-reassign to another clerk
     if job.property:
         new_clerk_id = auto_assign_job(job, job.property)
@@ -392,6 +473,16 @@ def reject_job(job_id):
                 reason='Auto-reassigned after rejection'
             )
             db.session.add(reassign_log)
+            
+            # Notify new clerk about reassignment
+            create_notification(
+                user_id=new_clerk_id,
+                notification_type='JOB_ASSIGNED',
+                title='Job Reassigned to You',
+                body=f'A job at {property_address} has been reassigned to you. Appointment: {appointment_date}',
+                job_id=job.id,
+                channel='in_app'
+            )
     
     db.session.commit()
     return jsonify(job.to_dict()), 200
@@ -403,6 +494,11 @@ def complete_job(job_id):
     """Clerk completes job"""
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
+    current_user = request.current_user
+    
+    # Get clerk info
+    user = User.query.filter_by(cognito_sub=current_user.get('cognito_sub')).first()
+    clerk_name = user.full_name if user else 'Clerk'
     
     job.status = 'completed'
     job.check_out_at = datetime.utcnow()
@@ -414,6 +510,35 @@ def complete_job(job_id):
     if handover_data:
         handover_data = convert_handover_camel_to_snake(handover_data)
     job.handover_data = handover_data
+    
+    # Notify admin and agent about job completion
+    property_address = job.property.address_line_1 if job.property else 'Property'
+    if job.property and job.property.address_line_2:
+        property_address += f", {job.property.address_line_2}"
+    appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+    
+    # Notify admin
+    admin_users = User.query.filter_by(role='admin', is_active=True).all()
+    for admin in admin_users:
+        create_notification(
+            user_id=admin.id,
+            notification_type='JOB_COMPLETED',
+            title='Job Completed',
+            body=f'{clerk_name} has completed job at {property_address} (Appointment: {appointment_date})',
+            job_id=job.id,
+            channel='in_app'
+        )
+    
+    # Notify agent if assigned
+    if job.assigned_agent_id:
+        create_notification(
+            user_id=job.assigned_agent_id,
+            notification_type='JOB_COMPLETED',
+            title='Job Completed',
+            body=f'Job at {property_address} has been completed by {clerk_name}. Appointment: {appointment_date}',
+            job_id=job.id,
+            channel='in_app'
+        )
     
     db.session.commit()
     return jsonify(job.to_dict()), 200

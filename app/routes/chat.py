@@ -4,6 +4,7 @@ from app.models.chat import ChatMessage, ChatParticipant
 from app.models.job import Job
 from app.models.user import User
 from app.utils.auth import require_auth
+from app.utils.helpers import create_notification
 from datetime import datetime
 
 bp = Blueprint('chat', __name__)
@@ -56,6 +57,51 @@ def send_message(job_id):
     )
     
     db.session.add(message)
+    db.session.flush()  # Get message.id before commit
+    
+    # Only create notifications for non-system messages
+    is_system_message = data.get('is_system_message', False)
+    
+    if not is_system_message:
+        # Get sender info for notification
+        sender_name = user.full_name if user else 'Someone'
+        property_address = job.property.address_line_1 if job.property else 'Property'
+        if job.property and job.property.address_line_2:
+            property_address += f", {job.property.address_line_2}"
+        
+        # Determine who should receive notifications (all job participants except sender)
+        notification_recipients = []
+        
+        # Add assigned clerk (if not the sender)
+        if job.assigned_clerk_id and job.assigned_clerk_id != user.id:
+            notification_recipients.append(job.assigned_clerk_id)
+        
+        # Add assigned agent (if not the sender)
+        if job.assigned_agent_id and job.assigned_agent_id != user.id:
+            notification_recipients.append(job.assigned_agent_id)
+        
+        # Add all admin users (admins can see all jobs)
+        admin_users = User.query.filter_by(role='admin', is_active=True).all()
+        for admin in admin_users:
+            if admin.id != user.id and admin.id not in notification_recipients:
+                notification_recipients.append(admin.id)
+        
+        # Create notifications for all recipients
+        message_content = data.get('content', '')
+        message_preview = message_content[:100]  # First 100 characters
+        if len(message_content) > 100:
+            message_preview += '...'
+        
+        for recipient_id in notification_recipients:
+            create_notification(
+                user_id=recipient_id,
+                notification_type='CHAT_MESSAGE',
+                title=f'New Message from {sender_name}',
+                body=f'New message in job chat for {property_address}: {message_preview}',
+                job_id=job_id,
+                channel='in_app'
+            )
+    
     db.session.commit()
     
     # Include sender information in response

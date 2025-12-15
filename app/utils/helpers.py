@@ -1,6 +1,8 @@
 """Helper utility functions"""
 from math import radians, cos, sin, asin, sqrt
 import re
+from app import db
+from app.models.notification import Notification
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     """
@@ -94,4 +96,32 @@ def convert_handover_snake_to_camel(data):
         converted[frontend_key] = value
     
     return converted
+
+def create_notification(user_id, notification_type, title, body, job_id=None, channel='in_app'):
+    """
+    Helper function to create a notification for a user
+    
+    Args:
+        user_id: UUID of the user to notify
+        notification_type: Type of notification (e.g., 'JOB_ASSIGNED', 'JOB_COMPLETED')
+        title: Notification title
+        body: Notification body/message
+        job_id: Optional related job ID
+        channel: Notification channel ('in_app', 'email', 'sms')
+    
+    Returns:
+        Created Notification object
+    """
+    notification = Notification(
+        user_id=user_id,
+        related_job_id=job_id,
+        type=notification_type,
+        title=title,
+        body=body,
+        channel=channel,
+        delivery_status='sent',
+        is_read=False
+    )
+    db.session.add(notification)
+    return notification
 
