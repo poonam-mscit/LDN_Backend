@@ -7,7 +7,7 @@ from app.models.assignment_log import AssignmentLog
 from app.models.availability import ClerkAvailability
 from app.utils.auth import require_auth, require_role, get_current_user
 from app.utils.helpers import convert_handover_camel_to_snake, calculate_distance, create_notification
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 
 bp = Blueprint('jobs', __name__)
 
@@ -82,8 +82,15 @@ def get_job(job_id):
 
 def auto_assign_job(job, property_obj):
     """Auto-assign job to best available clerk"""
-    appointment_date = job.appointment_date.date()
-    is_today = appointment_date == date.today()
+    # Convert timezone-aware datetime to UTC date for comparison
+    if job.appointment_date.tzinfo:
+        appointment_date_utc = job.appointment_date.astimezone(timezone.utc).date()
+    else:
+        appointment_date_utc = job.appointment_date.date()
+    
+    # Get today's date in UTC for proper comparison
+    today_utc = datetime.now(timezone.utc).date()
+    is_today = appointment_date_utc == today_utc
     
     # Find available clerks
     query = User.query.filter_by(role='clerk', is_active=True)
@@ -108,7 +115,7 @@ def auto_assign_job(job, property_obj):
             # For future dates, check availability calendar
             availability = ClerkAvailability.query.filter_by(
                 user_id=clerk.id,
-                available_date=appointment_date,
+                available_date=appointment_date_utc,
                 is_available=True
             ).first()
             if availability:
@@ -147,7 +154,7 @@ def auto_assign_job(job, property_obj):
                 # For future dates, use availability postcode if available
                 availability = ClerkAvailability.query.filter_by(
                     user_id=clerk.id,
-                    available_date=appointment_date
+                    available_date=appointment_date_utc
                 ).first()
                 if availability and availability.postcode:
                     # Use postcode matching as fallback (simplified)
@@ -234,7 +241,15 @@ def create_job():
             property_address = property_obj.address_line_1 or 'Property'
             if property_obj.address_line_2:
                 property_address += f", {property_obj.address_line_2}"
-            appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+            # Format appointment date in UTC for notifications
+            if job.appointment_date:
+                if job.appointment_date.tzinfo:
+                    appointment_dt_utc = job.appointment_date.astimezone(timezone.utc)
+                else:
+                    appointment_dt_utc = job.appointment_date.replace(tzinfo=timezone.utc)
+                appointment_date = appointment_dt_utc.strftime('%d/%m/%Y at %H:%M UTC')
+            else:
+                appointment_date = 'TBD'
             
             create_notification(
                 user_id=clerk_id,
@@ -272,7 +287,15 @@ def create_job():
             property_address = property_obj.address_line_1 or 'Property'
             if property_obj.address_line_2:
                 property_address += f", {property_obj.address_line_2}"
-            appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+            # Format appointment date in UTC for notifications
+            if job.appointment_date:
+                if job.appointment_date.tzinfo:
+                    appointment_dt_utc = job.appointment_date.astimezone(timezone.utc)
+                else:
+                    appointment_dt_utc = job.appointment_date.replace(tzinfo=timezone.utc)
+                appointment_date = appointment_dt_utc.strftime('%d/%m/%Y at %H:%M UTC')
+            else:
+                appointment_date = 'TBD'
             
             create_notification(
                 user_id=clerk_id,
@@ -304,7 +327,19 @@ def update_job(job_id):
     for field in updatable_fields:
         if field in data:
             if field == 'appointment_date':
-                job.appointment_date = datetime.fromisoformat(data[field].replace('Z', '+00:00'))
+                # Parse appointment_date with proper timezone handling
+                appointment_date_str = data[field]
+                if 'Z' in appointment_date_str or '+' in appointment_date_str or (appointment_date_str.count('-') > 2 and ':' in appointment_date_str[-6:]):
+                    # Has timezone info
+                    if appointment_date_str.endswith('Z'):
+                        appointment_date_str = appointment_date_str.replace('Z', '+00:00')
+                    appointment_dt = datetime.fromisoformat(appointment_date_str)
+                else:
+                    # No timezone info - assume UTC and add timezone
+                    appointment_dt = datetime.fromisoformat(appointment_date_str)
+                    if appointment_dt.tzinfo is None:
+                        appointment_dt = appointment_dt.replace(tzinfo=timezone.utc)
+                job.appointment_date = appointment_dt
             else:
                 setattr(job, field, data[field])
     
@@ -339,7 +374,15 @@ def assign_job(job_id):
         property_address = job.property.address_line_1 if job.property else 'Property'
         if job.property and job.property.address_line_2:
             property_address += f", {job.property.address_line_2}"
-        appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+        # Format appointment date in UTC for notifications
+        if job.appointment_date:
+            if job.appointment_date.tzinfo:
+                appointment_dt_utc = job.appointment_date.astimezone(timezone.utc)
+            else:
+                appointment_dt_utc = job.appointment_date.replace(tzinfo=timezone.utc)
+            appointment_date = appointment_dt_utc.strftime('%d/%m/%Y at %H:%M UTC')
+        else:
+            appointment_date = 'TBD'
         
         create_notification(
             user_id=previous_clerk_id,
@@ -354,7 +397,15 @@ def assign_job(job_id):
     property_address = job.property.address_line_1 if job.property else 'Property'
     if job.property and job.property.address_line_2:
         property_address += f", {job.property.address_line_2}"
-    appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+    # Format appointment date in UTC for notifications
+    if job.appointment_date:
+        if job.appointment_date.tzinfo:
+            appointment_dt_utc = job.appointment_date.astimezone(timezone.utc)
+        else:
+            appointment_dt_utc = job.appointment_date.replace(tzinfo=timezone.utc)
+        appointment_date = appointment_dt_utc.strftime('%d/%m/%Y at %H:%M UTC')
+    else:
+        appointment_date = 'TBD'
     
     create_notification(
         user_id=clerk_id,
@@ -376,7 +427,7 @@ def start_job(job_id):
     """Clerk starts job (on_route status)"""
     job = Job.query.get_or_404(job_id)
     job.status = 'on_route'
-    job.on_route_at = datetime.utcnow()
+    job.on_route_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(job.to_dict()), 200
 
@@ -388,7 +439,7 @@ def check_in(job_id):
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
     
-    job.check_in_at = datetime.utcnow()
+    job.check_in_at = datetime.now(timezone.utc)
     job.check_in_lat = data.get('lat')
     job.check_in_lng = data.get('lng')
     job.status = 'in_progress'
@@ -444,7 +495,15 @@ def reject_job(job_id):
     property_address = job.property.address_line_1 if job.property else 'Property'
     if job.property and job.property.address_line_2:
         property_address += f", {job.property.address_line_2}"
-    appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+    # Format appointment date in UTC for notifications
+    if job.appointment_date:
+        if job.appointment_date.tzinfo:
+            appointment_dt_utc = job.appointment_date.astimezone(timezone.utc)
+        else:
+            appointment_dt_utc = job.appointment_date.replace(tzinfo=timezone.utc)
+        appointment_date = appointment_dt_utc.strftime('%d/%m/%Y at %H:%M UTC')
+    else:
+        appointment_date = 'TBD'
     clerk_name = user.full_name if user else 'Clerk'
     
     for admin in admin_users:
@@ -501,7 +560,7 @@ def complete_job(job_id):
     clerk_name = user.full_name if user else 'Clerk'
     
     job.status = 'completed'
-    job.check_out_at = datetime.utcnow()
+    job.check_out_at = datetime.now(timezone.utc)
     job.check_out_lat = data.get('lat')
     job.check_out_lng = data.get('lng')
     
@@ -515,7 +574,15 @@ def complete_job(job_id):
     property_address = job.property.address_line_1 if job.property else 'Property'
     if job.property and job.property.address_line_2:
         property_address += f", {job.property.address_line_2}"
-    appointment_date = job.appointment_date.strftime('%d/%m/%Y at %H:%M') if job.appointment_date else 'TBD'
+    # Format appointment date in UTC for notifications
+    if job.appointment_date:
+        if job.appointment_date.tzinfo:
+            appointment_dt_utc = job.appointment_date.astimezone(timezone.utc)
+        else:
+            appointment_dt_utc = job.appointment_date.replace(tzinfo=timezone.utc)
+        appointment_date = appointment_dt_utc.strftime('%d/%m/%Y at %H:%M UTC')
+    else:
+        appointment_date = 'TBD'
     
     # Notify admin
     admin_users = User.query.filter_by(role='admin', is_active=True).all()

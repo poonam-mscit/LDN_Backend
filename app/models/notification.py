@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Notification(db.Model):
     """Notification model matching database_schema.sql SECTION 8"""
@@ -21,7 +21,7 @@ class Notification(db.Model):
     delivery_status = db.Column(db.String(50), default='sent')  # 'sent', 'failed', 'delivered'
     
     is_read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     def to_dict(self):
         return {

@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class ChatMessage(db.Model):
     """Chat message model matching database_schema.sql SECTION 7"""
@@ -12,7 +12,7 @@ class ChatMessage(db.Model):
     sender_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='SET NULL'))
     content = db.Column(db.Text)
     attachment_url = db.Column(db.Text)
-    sent_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    sent_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_system_message = db.Column(db.Boolean, default=False)
     
     def to_dict(self):
@@ -35,7 +35,7 @@ class ChatParticipant(db.Model):
     
     job_id = db.Column(UUID(as_uuid=True), db.ForeignKey('jobs.id', ondelete='CASCADE'), primary_key=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
-    last_read_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    last_read_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     def to_dict(self):
         return {

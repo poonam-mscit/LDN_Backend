@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Property(db.Model):
     """Property model matching database_schema.sql SECTION 4"""
@@ -46,8 +46,8 @@ class Property(db.Model):
     last_synced_at = db.Column(db.DateTime(timezone=True))
     
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     jobs = db.relationship('Job', backref='property', lazy='dynamic')

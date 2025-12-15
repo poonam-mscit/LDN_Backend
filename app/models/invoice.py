@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class ClerkInvoice(db.Model):
     """Clerk invoice model matching database_schema.sql SECTION 9"""
@@ -14,7 +14,7 @@ class ClerkInvoice(db.Model):
     month_period = db.Column(db.Date, nullable=False)
     
     # Submission tracking
-    submitted_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    submitted_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(50), default='submitted')  # 'submitted', 'paid', 'rejected'
     
     # Optional fields
@@ -22,8 +22,8 @@ class ClerkInvoice(db.Model):
     admin_notes = db.Column(db.Text)
     
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Unique constraint
     __table_args__ = (db.UniqueConstraint('clerk_id', 'month_period', name='_clerk_month_uc'),)

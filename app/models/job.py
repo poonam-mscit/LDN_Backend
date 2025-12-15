@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.helpers import convert_handover_snake_to_camel
 
 class Job(db.Model):
@@ -59,8 +59,8 @@ class Job(db.Model):
     check_out_lng = db.Column(db.Numeric(11, 8))
     
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     chat_messages = db.relationship('ChatMessage', backref='job', lazy='dynamic', cascade='all, delete-orphan')

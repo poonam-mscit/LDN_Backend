@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class User(db.Model):
     """User model matching database_schema.sql SECTION 2"""
@@ -35,8 +35,8 @@ class User(db.Model):
     last_location_update = db.Column(db.DateTime(timezone=True))
     
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     assigned_jobs = db.relationship('Job', foreign_keys='Job.assigned_clerk_id', backref='assigned_clerk', lazy='dynamic')

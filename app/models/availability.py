@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 
 class ClerkAvailability(db.Model):
     """Clerk availability model matching database_schema.sql SECTION 2.5"""
@@ -28,8 +28,8 @@ class ClerkAvailability(db.Model):
     notes = db.Column(db.Text)
     
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Unique constraint
     __table_args__ = (db.UniqueConstraint('user_id', 'available_date', name='_user_date_uc'),)

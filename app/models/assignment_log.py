@@ -1,7 +1,7 @@
 from app import db
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class AssignmentLog(db.Model):
     """Assignment log model matching database_schema.sql SECTION 6"""
@@ -20,7 +20,7 @@ class AssignmentLog(db.Model):
     reason = db.Column(db.Text)
     
     # Timestamp
-    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     def to_dict(self):
         return {

@@ -5,7 +5,7 @@ from app.models.job import Job
 from app.models.user import User
 from app.utils.auth import require_auth
 from app.utils.helpers import create_notification
-from datetime import datetime
+from datetime import datetime, timezone
 
 bp = Blueprint('chat', __name__)
 
@@ -137,7 +137,7 @@ def mark_read(job_id):
         participant = ChatParticipant(job_id=job_id, user_id=user.id)
         db.session.add(participant)
     
-    participant.last_read_at = datetime.utcnow()
+    participant.last_read_at = datetime.now(timezone.utc)
     db.session.commit()
     
     return jsonify(participant.to_dict()), 200

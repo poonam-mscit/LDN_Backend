@@ -3,7 +3,7 @@ from app import db
 from app.models.integration import IntegrationSettings
 from app.models.settings import GeneralSettings
 from app.utils.auth import require_auth, require_role
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 bp = Blueprint('settings', __name__)
 
@@ -55,7 +55,7 @@ def update_general_settings():
     if 'postcode' in data:
         settings.postcode = data.get('postcode')
     
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     
     return jsonify({
@@ -115,13 +115,13 @@ def update_inventorybase_integration():
             integration.refresh_token = data['refresh_token']
         if 'token_expires_at' in data:
             integration.token_expires_at = datetime.fromisoformat(data['token_expires_at'])
-        integration.updated_at = datetime.utcnow()
+        integration.updated_at = datetime.now(timezone.utc)
     else:
         # Create new
         if not all(k in data for k in ['client_id', 'access_token', 'refresh_token']):
             return jsonify({'error': 'Missing required fields: client_id, access_token, refresh_token'}), 400
         
-        token_expires_at = datetime.fromisoformat(data.get('token_expires_at')) if data.get('token_expires_at') else datetime.utcnow() + timedelta(hours=2)
+        token_expires_at = datetime.fromisoformat(data.get('token_expires_at')) if data.get('token_expires_at') else datetime.now(timezone.utc) + timedelta(hours=2)
         
         integration = IntegrationSettings(
             service_name='inventorybase',
@@ -176,7 +176,7 @@ def sync_inventorybase_properties():
         return jsonify({'error': 'InventoryBase integration not configured'}), 400
     
     # Update last_synced_at
-    integration.last_synced_at = datetime.utcnow()
+    integration.last_synced_at = datetime.now(timezone.utc)
     db.session.commit()
     
     # In production, this would trigger the actual sync process

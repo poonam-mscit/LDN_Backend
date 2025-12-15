@@ -5,7 +5,7 @@ from app.models.user import User
 from app.utils.auth import require_auth, require_role
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 bp = Blueprint('users', __name__)
 
@@ -99,7 +99,7 @@ def update_user(user_id):
         if 'current_lat' in data and 'current_lng' in data:
             user.current_lat = data['current_lat']
             user.current_lng = data['current_lng']
-            user.last_location_update = datetime.utcnow()
+            user.last_location_update = datetime.now(timezone.utc)
         
         # Commit changes
         db.session.commit()
