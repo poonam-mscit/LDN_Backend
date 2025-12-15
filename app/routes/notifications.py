@@ -9,7 +9,57 @@ bp = Blueprint('notifications', __name__)
 @bp.route('/', methods=['GET'])
 @require_auth
 def get_notifications():
-    """Get notifications for current user"""
+    """
+    Get notifications for current user
+    ---
+    tags:
+      - Notifications
+    parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: Page number
+      - in: query
+        name: per_page
+        schema:
+          type: integer
+          default: 20
+        description: Items per page
+      - in: query
+        name: unread_only
+        schema:
+          type: string
+          default: 'false'
+        description: Filter unread notifications only
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of notifications
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notifications:
+                  type: array
+                  items:
+                    type: object
+                total:
+                  type: integer
+                page:
+                  type: integer
+                per_page:
+                  type: integer
+                pages:
+                  type: integer
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     current_user = request.current_user
     
     # Get user_id from authenticated user
@@ -41,7 +91,32 @@ def get_notifications():
 @bp.route('/<notification_id>/read', methods=['PUT'])
 @require_auth
 def mark_notification_read(notification_id):
-    """Mark notification as read"""
+    """
+    Mark notification as read
+    ---
+    tags:
+      - Notifications
+    parameters:
+      - in: path
+        name: notification_id
+        required: true
+        schema:
+          type: string
+        description: Notification ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Notification marked as read
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Notification not found
+      401:
+        description: Unauthorized
+    """
     notification = Notification.query.get_or_404(notification_id)
     notification.is_read = True
     db.session.commit()
@@ -50,7 +125,28 @@ def mark_notification_read(notification_id):
 @bp.route('/read-all', methods=['PUT'])
 @require_auth
 def mark_all_read():
-    """Mark all notifications as read for current user"""
+    """
+    Mark all notifications as read for current user
+    ---
+    tags:
+      - Notifications
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: All notifications marked as read
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     current_user = request.current_user
     
     # Get user_id from authenticated user
@@ -65,7 +161,28 @@ def mark_all_read():
 @bp.route('/unread-count', methods=['GET'])
 @require_auth
 def get_unread_count():
-    """Get unread notification count for current user"""
+    """
+    Get unread notification count for current user
+    ---
+    tags:
+      - Notifications
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Unread notification count
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unread_count:
+                  type: integer
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     current_user = request.current_user
     
     # Get user_id from authenticated user

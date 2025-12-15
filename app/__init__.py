@@ -2,9 +2,11 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_migrate import Migrate
+from flasgger import Swagger
 
 db = SQLAlchemy()
 migrate = Migrate()
+swagger = Swagger()
 
 def create_app(config_class=None):
     """Application factory pattern"""
@@ -18,6 +20,9 @@ def create_app(config_class=None):
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    
+    # Initialize Swagger
+    swagger.init_app(app)
     
     # Configure CORS with allowed origins from config
     # If '*' is in the list, allow all origins (development)
@@ -52,6 +57,39 @@ def create_app(config_class=None):
     app.register_blueprint(chat.bp, url_prefix='/api/chat')
     app.register_blueprint(notifications.bp, url_prefix='/api/notifications')
     app.register_blueprint(settings.bp, url_prefix='/api/settings')
+    
+    # Swagger configuration
+    app.config['SWAGGER'] = {
+        'title': 'LDN API Documentation',
+        'uiversion': 3,
+        'openapi': '3.0.0',
+        'info': {
+            'title': 'LDN API',
+            'description': 'API documentation for LDN application',
+            'version': '1.0.0',
+        },
+        'servers': [
+            {
+                'url': 'http://localhost:5000',
+                'description': 'Development server'
+            }
+        ],
+        'components': {
+            'securitySchemes': {
+                'Bearer': {
+                    'type': 'http',
+                    'scheme': 'bearer',
+                    'bearerFormat': 'JWT',
+                    'description': 'Enter JWT token'
+                }
+            }
+        },
+        'security': [
+            {
+                'Bearer': []
+            }
+        ]
+    }
     
     return app
 

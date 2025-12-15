@@ -17,7 +17,54 @@ def allowed_file(filename):
 @bp.route('/', methods=['GET'])
 @require_auth
 def get_users():
-    """Get all users"""
+    """
+    Get all users
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: Page number for pagination
+      - in: query
+        name: per_page
+        schema:
+          type: integer
+          default: 20
+        description: Number of items per page
+      - in: query
+        name: role
+        schema:
+          type: string
+        description: Filter by user role (admin, agent, clerk)
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of users
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    type: object
+                total:
+                  type: integer
+                page:
+                  type: integer
+                per_page:
+                  type: integer
+                pages:
+                  type: integer
+      401:
+        description: Unauthorized
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     role = request.args.get('role')
@@ -40,14 +87,95 @@ def get_users():
 @bp.route('/<user_id>', methods=['GET'])
 @require_auth
 def get_user(user_id):
-    """Get user by ID"""
+    """
+    Get user by ID
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+        description: User ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: User details
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     user = User.query.get_or_404(user_id)
     return jsonify(user.to_dict()), 200
 
 @bp.route('/<user_id>', methods=['PUT'])
 @require_auth
 def update_user(user_id):
-    """Update user (self-service or admin)"""
+    """
+    Update user (self-service or admin)
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+        description: User ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              full_name:
+                type: string
+              phone_number:
+                type: string
+              is_active:
+                type: boolean
+              address_line_1:
+                type: string
+              address_line_2:
+                type: string
+              city:
+                type: string
+              postcode:
+                type: string
+              address_file_url:
+                type: string
+              is_on_shift:
+                type: boolean
+              current_lat:
+                type: number
+              current_lng:
+                type: number
+    responses:
+      200:
+        description: User updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      400:
+        description: Bad request (address verification required)
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     try:
         user = User.query.get_or_404(user_id)
         data = request.get_json()
@@ -116,14 +244,69 @@ def update_user(user_id):
 @bp.route('/me', methods=['GET'])
 @require_auth
 def get_current_user():
-    """Get current authenticated user"""
+    """
+    Get current authenticated user
+    ---
+    tags:
+      - Users
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Current user information
+        content:
+          application/json:
+            schema:
+              type: object
+      401:
+        description: Unauthorized
+    """
     # TODO: Extract user from token
     return jsonify({'message': 'Get current user endpoint'}), 200
 
 @bp.route('/<user_id>/location', methods=['PUT'])
 @require_auth
 def update_location(user_id):
-    """Update user location (for mobile app)"""
+    """
+    Update user location (for mobile app)
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+        description: User ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - lat
+              - lng
+            properties:
+              lat:
+                type: number
+              lng:
+                type: number
+    responses:
+      200:
+        description: Location updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     user = User.query.get_or_404(user_id)
     data = request.get_json()
     
@@ -137,7 +320,54 @@ def update_location(user_id):
 @bp.route('/<user_id>/upload-address', methods=['POST'])
 @require_auth
 def upload_address_file(user_id):
-    """Upload address verification file"""
+    """
+    Upload address verification file
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+        description: User ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - file
+            properties:
+              file:
+                type: string
+                format: binary
+                description: Address verification file (PDF, JPG, JPEG, PNG)
+    responses:
+      200:
+        description: File uploaded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                file_url:
+                  type: string
+                user:
+                  type: object
+      400:
+        description: Bad request (no file, invalid file type)
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     user = User.query.get_or_404(user_id)
     
     if 'file' not in request.files:
@@ -182,7 +412,37 @@ def upload_address_file(user_id):
 @require_auth
 @require_role('admin')
 def delete_user(user_id):
-    """Delete user (admin only)"""
+    """
+    Delete user (admin only)
+    ---
+    tags:
+      - Users
+    parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+        description: User ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: User deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     user = User.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()

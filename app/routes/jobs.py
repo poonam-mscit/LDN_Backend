@@ -14,7 +14,69 @@ bp = Blueprint('jobs', __name__)
 @bp.route('/', methods=['GET'])
 @require_auth
 def get_jobs():
-    """Get all jobs with filters"""
+    """
+    Get all jobs with filters
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: Page number
+      - in: query
+        name: per_page
+        schema:
+          type: integer
+          default: 20
+        description: Items per page
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by status
+      - in: query
+        name: clerk_id
+        schema:
+          type: string
+        description: Filter by clerk ID
+      - in: query
+        name: agent_id
+        schema:
+          type: string
+        description: Filter by agent ID
+      - in: query
+        name: property_id
+        schema:
+          type: string
+        description: Filter by property ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of jobs
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jobs:
+                  type: array
+                  items:
+                    type: object
+                total:
+                  type: integer
+                page:
+                  type: integer
+                per_page:
+                  type: integer
+                pages:
+                  type: integer
+      401:
+        description: Unauthorized
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     status = request.args.get('status')
@@ -60,7 +122,32 @@ def get_jobs():
 @bp.route('/<job_id>', methods=['GET'])
 @require_auth
 def get_job(job_id):
-    """Get job by ID"""
+    """
+    Get job by ID
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Job details
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+    """
     job = Job.query.get_or_404(job_id)
     job_dict = job.to_dict()
     # Include property details
@@ -181,7 +268,69 @@ def auto_assign_job(job, property_obj):
 @require_auth
 @require_role('admin', 'agent')
 def create_job():
-    """Create a new job"""
+    """
+    Create a new job
+    ---
+    tags:
+      - Jobs
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - property_id
+              - appointment_date
+            properties:
+              property_id:
+                type: string
+              assigned_agent_id:
+                type: string
+              job_type:
+                type: string
+              priority:
+                type: string
+              appointment_date:
+                type: string
+                format: date-time
+              estimated_duration_minutes:
+                type: integer
+              access_instructions:
+                type: string
+              key_location:
+                type: string
+              admin_attachments:
+                type: array
+                items:
+                  type: string
+              admin_notes:
+                type: string
+              booking_questions:
+                type: object
+              assignment_type:
+                type: string
+                enum: [auto, manual]
+              clerk_id:
+                type: string
+              reason:
+                type: string
+    responses:
+      201:
+        description: Job created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      400:
+        description: Bad request
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin/agent only)
+    """
     data = request.get_json()
     current_user = request.current_user
     
@@ -313,7 +462,64 @@ def create_job():
 @bp.route('/<job_id>', methods=['PUT'])
 @require_auth
 def update_job(job_id):
-    """Update job"""
+    """
+    Update job
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              job_type:
+                type: string
+              priority:
+                type: string
+              appointment_date:
+                type: string
+                format: date-time
+              estimated_duration_minutes:
+                type: integer
+              access_instructions:
+                type: string
+              key_location:
+                type: string
+              admin_attachments:
+                type: array
+              admin_notes:
+                type: string
+              booking_questions:
+                type: object
+              status:
+                type: string
+              assigned_clerk_id:
+                type: string
+              assigned_agent_id:
+                type: string
+    responses:
+      200:
+        description: Job updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+    """
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
     
@@ -350,7 +556,47 @@ def update_job(job_id):
 @require_auth
 @require_role('admin')
 def assign_job(job_id):
-    """Assign job to clerk (manual assignment)"""
+    """
+    Assign job to clerk (manual assignment)
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - clerk_id
+            properties:
+              clerk_id:
+                type: string
+              reason:
+                type: string
+    responses:
+      200:
+        description: Job assigned successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
     clerk_id = data.get('clerk_id')
@@ -424,7 +670,34 @@ def assign_job(job_id):
 @require_auth
 @require_role('clerk')
 def start_job(job_id):
-    """Clerk starts job (on_route status)"""
+    """
+    Clerk starts job (on_route status)
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Job started successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (clerk only)
+    """
     job = Job.query.get_or_404(job_id)
     job.status = 'on_route'
     job.on_route_at = datetime.now(timezone.utc)
@@ -435,7 +708,45 @@ def start_job(job_id):
 @require_auth
 @require_role('clerk')
 def check_in(job_id):
-    """Clerk checks in at property"""
+    """
+    Clerk checks in at property
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              lat:
+                type: number
+              lng:
+                type: number
+    responses:
+      200:
+        description: Check-in successful
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (clerk only)
+    """
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
     
@@ -463,7 +774,34 @@ def check_in(job_id):
 @require_auth
 @require_role('clerk')
 def reject_job(job_id):
-    """Clerk rejects job assignment - triggers auto-reassignment"""
+    """
+    Clerk rejects job assignment - triggers auto-reassignment
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Job rejected, auto-reassignment triggered
+        content:
+          application/json:
+            schema:
+              type: object
+      403:
+        description: Forbidden (not assigned to this job)
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+    """
     job = Job.query.get_or_404(job_id)
     current_user = request.current_user
     
@@ -550,7 +888,47 @@ def reject_job(job_id):
 @require_auth
 @require_role('clerk')
 def complete_job(job_id):
-    """Clerk completes job"""
+    """
+    Clerk completes job
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              lat:
+                type: number
+              lng:
+                type: number
+              handover_data:
+                type: object
+    responses:
+      200:
+        description: Job completed successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (clerk only)
+    """
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
     current_user = request.current_user
@@ -613,14 +991,83 @@ def complete_job(job_id):
 @bp.route('/<job_id>/assignment-logs', methods=['GET'])
 @require_auth
 def get_job_assignment_logs(job_id):
-    """Get assignment logs for a specific job"""
+    """
+    Get assignment logs for a specific job
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Assignment logs
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+    """
     logs = AssignmentLog.query.filter_by(job_id=job_id).order_by(AssignmentLog.created_at.desc()).all()
     return jsonify([log.to_dict() for log in logs]), 200
 
 @bp.route('/assignment-logs', methods=['GET'])
 @require_auth
 def get_all_assignment_logs():
-    """Get all assignment logs"""
+    """
+    Get all assignment logs
+    ---
+    tags:
+      - Jobs
+    parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: Page number
+      - in: query
+        name: per_page
+        schema:
+          type: integer
+          default: 50
+        description: Items per page
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Assignment logs with pagination
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logs:
+                  type: array
+                  items:
+                    type: object
+                total:
+                  type: integer
+                page:
+                  type: integer
+                per_page:
+                  type: integer
+                pages:
+                  type: integer
+      401:
+        description: Unauthorized
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     

@@ -34,7 +34,57 @@ def get_secret_hash(username):
 
 @bp.route('/signup', methods=['POST'])
 def signup():
-    """Sign up a new user"""
+    """
+    Sign up a new user
+    ---
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - password
+              - firstName
+              - lastName
+              - role
+            properties:
+              email:
+                type: string
+                format: email
+              password:
+                type: string
+              firstName:
+                type: string
+              lastName:
+                type: string
+              phoneNumber:
+                type: string
+              role:
+                type: string
+                enum: [admin, agent, clerk]
+    responses:
+      200:
+        description: User created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                userSub:
+                  type: string
+                message:
+                  type: string
+                role:
+                  type: string
+      400:
+        description: Bad request (missing fields, user exists, invalid password)
+    """
     try:
         data = request.get_json()
         email = data.get('email')
@@ -202,7 +252,49 @@ def signup():
 
 @bp.route('/login', methods=['POST'])
 def login():
-    """Login user and return tokens"""
+    """
+    Login user and return tokens
+    ---
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+                format: email
+              password:
+                type: string
+    responses:
+      200:
+        description: Login successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                idToken:
+                  type: string
+                accessToken:
+                  type: string
+                refreshToken:
+                  type: string
+                user:
+                  type: object
+      401:
+        description: Unauthorized (incorrect credentials, user not confirmed)
+      404:
+        description: User not found
+    """
     try:
         data = request.get_json()
         email = data.get('email')
@@ -336,7 +428,41 @@ def login():
 
 @bp.route('/confirm-signup', methods=['POST'])
 def confirm_signup():
-    """Confirm user signup with verification code"""
+    """
+    Confirm user signup with verification code
+    ---
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - code
+            properties:
+              email:
+                type: string
+                format: email
+              code:
+                type: string
+    responses:
+      200:
+        description: Email verified successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+      400:
+        description: Invalid or expired code
+    """
     try:
         data = request.get_json()
         email = data.get('email')
@@ -423,7 +549,38 @@ def confirm_signup():
 
 @bp.route('/resend-code', methods=['POST'])
 def resend_code():
-    """Resend verification code"""
+    """
+    Resend verification code
+    ---
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+            properties:
+              email:
+                type: string
+                format: email
+    responses:
+      200:
+        description: Verification code sent successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+      400:
+        description: Bad request
+    """
     try:
         data = request.get_json()
         email = data.get('email')
@@ -459,7 +616,38 @@ def resend_code():
 
 @bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
-    """Initiate forgot password flow"""
+    """
+    Initiate forgot password flow
+    ---
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+            properties:
+              email:
+                type: string
+                format: email
+    responses:
+      200:
+        description: Password reset code sent to email
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+      404:
+        description: User not found
+    """
     try:
         data = request.get_json()
         email = data.get('email')
@@ -499,7 +687,44 @@ def forgot_password():
 
 @bp.route('/confirm-forgot-password', methods=['POST'])
 def confirm_forgot_password():
-    """Confirm forgot password with code and new password"""
+    """
+    Confirm forgot password with code and new password
+    ---
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - code
+              - newPassword
+            properties:
+              email:
+                type: string
+                format: email
+              code:
+                type: string
+              newPassword:
+                type: string
+    responses:
+      200:
+        description: Password reset successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+      400:
+        description: Invalid code, expired code, or password doesn't meet requirements
+    """
     try:
         data = request.get_json()
         email = data.get('email')
@@ -547,7 +772,28 @@ def confirm_forgot_password():
 
 @bp.route('/verify', methods=['POST'])
 def verify_token():
-    """Verify Cognito token and return user info"""
+    """
+    Verify Cognito token and return user info
+    ---
+    tags:
+      - Authentication
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Token verified, user info returned
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                token_claims:
+                  type: object
+      401:
+        description: Invalid or expired token
+    """
     try:
         auth_header = request.headers.get('Authorization')
         if not auth_header:
@@ -614,7 +860,28 @@ def verify_token():
 @bp.route('/me', methods=['GET'])
 @require_auth
 def get_current_user_info():
-    """Get current authenticated user info"""
+    """
+    Get current authenticated user info
+    ---
+    tags:
+      - Authentication
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Current user information
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     try:
         cognito_sub = request.current_user.get('cognito_sub')
         user = User.query.filter_by(cognito_sub=cognito_sub).first()
@@ -629,6 +896,25 @@ def get_current_user_info():
 @bp.route('/logout', methods=['POST'])
 @require_auth
 def logout():
-    """Logout endpoint"""
+    """
+    Logout endpoint
+    ---
+    tags:
+      - Authentication
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Logged out successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      401:
+        description: Unauthorized
+    """
     # In Cognito, logout is handled on frontend by clearing tokens
     return jsonify({'message': 'Logged out successfully'}), 200

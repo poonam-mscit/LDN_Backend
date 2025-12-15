@@ -9,7 +9,49 @@ bp = Blueprint('availability', __name__)
 @bp.route('/', methods=['GET'])
 @require_auth
 def get_availability():
-    """Get availability records"""
+    """
+    Get availability records
+    ---
+    tags:
+      - Availability
+    parameters:
+      - in: query
+        name: user_id
+        schema:
+          type: string
+        description: Filter by user ID
+      - in: query
+        name: available_date
+        schema:
+          type: string
+          format: date
+        description: Filter by specific date
+      - in: query
+        name: start_date
+        schema:
+          type: string
+          format: date
+        description: Start date for range filter
+      - in: query
+        name: end_date
+        schema:
+          type: string
+          format: date
+        description: End date for range filter
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of availability records
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+      401:
+        description: Unauthorized
+    """
     user_id = request.args.get('user_id')
     available_date = request.args.get('available_date')
     start_date = request.args.get('start_date')
@@ -32,7 +74,65 @@ def get_availability():
 @require_auth
 @require_role('clerk')
 def create_availability():
-    """Create availability record(s) - supports single or bulk creation"""
+    """
+    Create availability record(s) - supports single or bulk creation
+    ---
+    tags:
+      - Availability
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                properties:
+                  user_id:
+                    type: string
+                  available_date:
+                    type: string
+                    format: date
+                  is_available:
+                    type: boolean
+                  start_time:
+                    type: string
+                    format: time
+                  end_time:
+                    type: string
+                    format: time
+                  postcode:
+                    type: string
+                  notes:
+                    type: string
+              - type: array
+                items:
+                  type: object
+              - type: object
+                properties:
+                  user_id:
+                    type: string
+                  availability:
+                    type: object
+    responses:
+      201:
+        description: Availability record(s) created successfully
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                - type: array
+                  items:
+                    type: object
+      400:
+        description: Bad request
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (clerk only)
+    """
     data = request.get_json()
     
     # Check if this is a bulk save (array of records or object with date keys)
@@ -155,7 +255,56 @@ def create_availability():
 @require_auth
 @require_role('clerk')
 def update_availability(availability_id):
-    """Update availability record"""
+    """
+    Update availability record
+    ---
+    tags:
+      - Availability
+    parameters:
+      - in: path
+        name: availability_id
+        required: true
+        schema:
+          type: string
+        description: Availability record ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              available_date:
+                type: string
+                format: date
+              is_available:
+                type: boolean
+              start_time:
+                type: string
+                format: time
+              end_time:
+                type: string
+                format: time
+              postcode:
+                type: string
+              notes:
+                type: string
+    responses:
+      200:
+        description: Availability record updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Availability record not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (clerk only)
+    """
     availability = ClerkAvailability.query.get_or_404(availability_id)
     data = request.get_json()
     
@@ -179,7 +328,37 @@ def update_availability(availability_id):
 @require_auth
 @require_role('clerk')
 def delete_availability(availability_id):
-    """Delete availability record"""
+    """
+    Delete availability record
+    ---
+    tags:
+      - Availability
+    parameters:
+      - in: path
+        name: availability_id
+        required: true
+        schema:
+          type: string
+        description: Availability record ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Availability record deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      404:
+        description: Availability record not found
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (clerk only)
+    """
     availability = ClerkAvailability.query.get_or_404(availability_id)
     db.session.delete(availability)
     db.session.commit()

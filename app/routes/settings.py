@@ -11,7 +11,25 @@ bp = Blueprint('settings', __name__)
 @require_auth
 @require_role('admin')
 def get_general_settings():
-    """Get general company settings"""
+    """
+    Get general company settings
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: General settings
+        content:
+          application/json:
+            schema:
+              type: object
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     # Get the first (and only) settings record, or create default if none exists
     settings = GeneralSettings.query.first()
     
@@ -27,7 +45,54 @@ def get_general_settings():
 @require_auth
 @require_role('admin')
 def update_general_settings():
-    """Update general company settings"""
+    """
+    Update general company settings
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              company_name:
+                type: string
+              email:
+                type: string
+                format: email
+              telephone:
+                type: string
+              website:
+                type: string
+              address_line_1:
+                type: string
+              address_line_2:
+                type: string
+              city:
+                type: string
+              postcode:
+                type: string
+    responses:
+      200:
+        description: Settings updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                settings:
+                  type: object
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     data = request.get_json()
     
     # Get existing settings or create new
@@ -67,7 +132,27 @@ def update_general_settings():
 @require_auth
 @require_role('admin')
 def get_integrations():
-    """Get all integration settings"""
+    """
+    Get all integration settings
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of integrations
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     integrations = IntegrationSettings.query.all()
     return jsonify([integration.to_dict() for integration in integrations]), 200
 
@@ -75,7 +160,32 @@ def get_integrations():
 @require_auth
 @require_role('admin')
 def get_inventorybase_integration():
-    """Get InventoryBase integration settings"""
+    """
+    Get InventoryBase integration settings
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: InventoryBase integration settings
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_name:
+                  type: string
+                client_id:
+                  type: string
+                connected:
+                  type: boolean
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     integration = IntegrationSettings.query.filter_by(service_name='inventorybase').first()
     
     if not integration:
@@ -99,7 +209,49 @@ def get_inventorybase_integration():
 @require_auth
 @require_role('admin')
 def update_inventorybase_integration():
-    """Update or create InventoryBase integration settings"""
+    """
+    Update or create InventoryBase integration settings
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - client_id
+              - access_token
+              - refresh_token
+            properties:
+              client_id:
+                type: string
+              access_token:
+                type: string
+              refresh_token:
+                type: string
+              token_expires_at:
+                type: string
+                format: date-time
+              scope:
+                type: string
+    responses:
+      200:
+        description: Integration settings updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      400:
+        description: Missing required fields
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     data = request.get_json()
     
     # Check if integration exists
@@ -149,7 +301,43 @@ def update_inventorybase_integration():
 @require_auth
 @require_role('admin')
 def test_inventorybase_connection():
-    """Test InventoryBase connection"""
+    """
+    Test InventoryBase connection
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              client_id:
+                type: string
+              client_secret:
+                type: string
+    responses:
+      200:
+        description: Connection test result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                connected:
+                  type: boolean
+      400:
+        description: Client ID required
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     data = request.get_json()
     client_id = data.get('client_id')
     client_secret = data.get('client_secret')  # This would be used for OAuth flow
@@ -169,7 +357,33 @@ def test_inventorybase_connection():
 @require_auth
 @require_role('admin')
 def sync_inventorybase_properties():
-    """Trigger property sync from InventoryBase"""
+    """
+    Trigger property sync from InventoryBase
+    ---
+    tags:
+      - Settings
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Property sync initiated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                last_synced_at:
+                  type: string
+                  format: date-time
+      400:
+        description: Integration not configured
+      401:
+        description: Unauthorized
+      403:
+        description: Forbidden (admin only)
+    """
     integration = IntegrationSettings.query.filter_by(service_name='inventorybase').first()
     
     if not integration:

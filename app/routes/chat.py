@@ -12,7 +12,34 @@ bp = Blueprint('chat', __name__)
 @bp.route('/jobs/<job_id>/messages', methods=['GET'])
 @require_auth
 def get_messages(job_id):
-    """Get all messages for a job"""
+    """
+    Get all messages for a job
+    ---
+    tags:
+      - Chat
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of messages
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+      404:
+        description: Job not found
+      401:
+        description: Unauthorized
+    """
     job = Job.query.get_or_404(job_id)
     messages = ChatMessage.query.filter_by(job_id=job_id).order_by(ChatMessage.sent_at).all()
     
@@ -38,7 +65,47 @@ def get_messages(job_id):
 @bp.route('/jobs/<job_id>/messages', methods=['POST'])
 @require_auth
 def send_message(job_id):
-    """Send a message in job chat"""
+    """
+    Send a message in job chat
+    ---
+    tags:
+      - Chat
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+              attachment_url:
+                type: string
+              is_system_message:
+                type: boolean
+    responses:
+      201:
+        description: Message sent successfully
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job or user not found
+      401:
+        description: Unauthorized
+    """
     job = Job.query.get_or_404(job_id)
     data = request.get_json()
     current_user = request.current_user
@@ -123,7 +190,32 @@ def send_message(job_id):
 @bp.route('/jobs/<job_id>/read', methods=['POST'])
 @require_auth
 def mark_read(job_id):
-    """Mark messages as read for current user"""
+    """
+    Mark messages as read for current user
+    ---
+    tags:
+      - Chat
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Messages marked as read
+        content:
+          application/json:
+            schema:
+              type: object
+      404:
+        description: Job or user not found
+      401:
+        description: Unauthorized
+    """
     job = Job.query.get_or_404(job_id)
     current_user = request.current_user
     
@@ -145,7 +237,35 @@ def mark_read(job_id):
 @bp.route('/jobs/<job_id>/unread-count', methods=['GET'])
 @require_auth
 def get_unread_count(job_id):
-    """Get unread message count for current user"""
+    """
+    Get unread message count for current user
+    ---
+    tags:
+      - Chat
+    parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          type: string
+        description: Job ID
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Unread message count
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unread_count:
+                  type: integer
+      404:
+        description: User not found
+      401:
+        description: Unauthorized
+    """
     current_user = request.current_user
     
     # Get user_id from authenticated user
