@@ -35,8 +35,22 @@ def get_jobs():
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     jobs = pagination.items
     
+    # Include property details for each job
+    jobs_data = []
+    for job in jobs:
+        job_dict = job.to_dict()
+        if job.property:
+            job_dict['property'] = job.property.to_dict()
+        # Include assigned clerk details if available
+        if job.assigned_clerk:
+            job_dict['clerk'] = {
+                'id': str(job.assigned_clerk.id),
+                'name': job.assigned_clerk.full_name
+            }
+        jobs_data.append(job_dict)
+    
     return jsonify({
-        'jobs': [job.to_dict() for job in jobs],
+        'jobs': jobs_data,
         'total': pagination.total,
         'page': page,
         'per_page': per_page,
@@ -52,6 +66,18 @@ def get_job(job_id):
     # Include property details
     if job.property:
         job_dict['property'] = job.property.to_dict()
+    # Include assigned clerk details if available
+    if job.assigned_clerk:
+        job_dict['clerk'] = {
+            'id': str(job.assigned_clerk.id),
+            'name': job.assigned_clerk.full_name
+        }
+    # Include assigned agent details if available
+    if job.assigned_agent:
+        job_dict['assigned_agent'] = {
+            'id': str(job.assigned_agent.id),
+            'full_name': job.assigned_agent.full_name
+        }
     return jsonify(job_dict), 200
 
 def auto_assign_job(job, property_obj):
@@ -157,15 +183,20 @@ def create_job():
     
     # Resolve created_by_user_id from cognito_sub
     created_by_user_id = None
+    assigned_agent_id = None
     if current_user.get('cognito_sub'):
         user = User.query.filter_by(cognito_sub=current_user['cognito_sub']).first()
         if user:
             created_by_user_id = user.id
+            # If the user is an agent, set assigned_agent_id
+            if user.role == 'agent':
+                assigned_agent_id = user.id
     
     # Create job
     job = Job(
         property_id=data['property_id'],
         created_by_user_id=created_by_user_id,
+        assigned_agent_id=assigned_agent_id,
         job_type=data.get('job_type', 'Logistics_Visit'),
         priority=data.get('priority', 'normal'),
         appointment_date=datetime.fromisoformat(data['appointment_date'].replace('Z', '+00:00')),
